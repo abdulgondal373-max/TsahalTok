@@ -1,2 +1,3 @@
-discord.py==2.3.2
-yt-dlp==2024.03.10
+discord.py
+yt-dlp
+audioop-lts
