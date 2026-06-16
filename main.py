@@ -12,7 +12,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot Webhook Anti-Crash en ligne !"
+    return "Bot Rapide en ligne !"
 
 def run_server():
     app.run(host='0.0.0.0', port=8080)
@@ -28,8 +28,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
-# Liste des meilleurs miroirs actuels. 
-# Si le #1 saute, il prend le #2, etc.
+# Liste de secours. Si le premier est mort, il teste le 2ème, etc.
 MIRRORS = [
     "vxtiktok.com",
     "tnktok.com",
@@ -38,20 +37,18 @@ MIRRORS = [
 ]
 
 async def get_working_link(original_link):
-    """Teste les miroirs en temps réel et renvoie le premier qui est en ligne"""
+    """Teste les miroirs pour trouver celui qui fonctionne"""
     async with aiohttp.ClientSession() as session:
         for mirror in MIRRORS:
-            # On fabrique le lien avec le miroir testé
             test_link = re.sub(r'(https?://(?:www\.|vm\.|vt\.)?)tiktok\.com', rf'\1{mirror}', original_link)
             try:
-                # On fait une requête "HEAD" (très rapide, ça ne télécharge pas la vidéo)
+                # Requête ultra-rapide pour vérifier si le site est en ligne
                 async with session.head(test_link, timeout=1.5) as response:
                     if response.status == 200:
-                        return test_link # Bingo, ce miroir fonctionne !
+                        return test_link
             except:
-                continue # Le miroir est mort (timeout ou erreur), on teste le suivant
+                continue
     
-    # Si par malheur TOUS les miroirs de la liste sont morts, on renvoie quand même le premier par défaut
     return re.sub(r'(https?://(?:www\.|vm\.|vt\.)?)tiktok\.com', rf'\1{MIRRORS[0]}', original_link)
 
 # ==========================================
@@ -59,44 +56,32 @@ async def get_working_link(original_link):
 # ==========================================
 @client.event
 async def on_ready():
-    print(f'✅ Bot automatique (avec Secours) connecté : {client.user}')
+    print(f'✅ Bot rapide connecté : {client.user}')
 
 @client.event
 async def on_message(message):
+    # On ignore les messages des autres bots ou de lui-même
     if message.author.bot:
         return
 
-    # Vérifie si le message contient un lien TikTok
+    # On cherche un lien TikTok
     match = re.search(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/[^\s]+', message.content)
     
     if match:
         original_url = match.group(0)
         
-        # 1. Cherche le miroir qui fonctionne actuellement
+        # Le bot trouve le bon lien miroir
         working_url = await get_working_link(original_url)
         
-        # 2. Remplace le lien dans le message de base (au cas où il a écrit du texte avec)
-        new_content = message.content.replace(original_url, working_url)
-
+        # Le bot répond directement au message
+        await message.reply(f"🎥 **Voici la vidéo :**\n{working_url}")
+        
+        # Petite astuce : on essaie de cacher l'aperçu de base du message de ton pote
+        # (car TikTok affiche souvent un encart noir inutile)
         try:
-            # 3. Utilisation du Webhook pour se faire passer pour ton pote
-            webhooks = await message.channel.webhooks()
-            webhook = discord.utils.get(webhooks, name="TikTokFixer")
-            if not webhook:
-                webhook = await message.channel.create_webhook(name="TikTokFixer")
-
-            await webhook.send(
-                content=new_content,
-                username=message.author.display_name,
-                avatar_url=message.author.display_avatar.url
-            )
-
-            # 4. Suppression du message original
-            await message.delete()
-
-        except discord.errors.Forbidden:
-            # Sécurité si le bot n'a pas les droits
-            await message.reply(f"🎥 **Vidéo :**\n{working_url}")
+            await message.edit(suppress=True)
+        except:
+            pass # S'il n'a pas les droits, ce n'est pas grave, il continue
 
 # ==========================================
 # 4. DÉMARRAGE
