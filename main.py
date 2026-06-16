@@ -46,8 +46,9 @@ async def on_message(message):
     if match:
         original_url = match.group(0)
         
-        # ON FORCE QUICKVIDS ICI (On remplace simplement le mot tiktok.com par quickvids.app)
-        working_url = re.sub(r'(https?://(?:www\.|vm\.|vt\.)?)tiktok\.com', r'\1quickvids.app', original_url)
+        # CORRECTION ICI : On supprime totalement les 'vm.' ou 'vt.' 
+        # et on les remplace par un lien Quickvids propre.
+        working_url = re.sub(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com', 'https://quickvids.app', original_url)
         
         # Le bot répond directement
         await message.reply(f"🎥 **Voici la vidéo :**\n{working_url}")
