@@ -30,7 +30,7 @@ client = discord.Client(intents=intents)
 
 # Liste de secours. Si le premier est mort, il teste le 2ème, etc.
 MIRRORS = [
-    "vxtiktok.com",
+    "quickvids.app",
     "tnktok.com",
     "tiktxk.com",
     "tikt0k.com"
