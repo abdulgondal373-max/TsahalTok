@@ -11,7 +11,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot Tiktokez en ligne !"
+    return "Bot Tnktok en ligne !"
 
 def run_server():
     app.run(host='0.0.0.0', port=8080)
@@ -32,7 +32,7 @@ client = discord.Client(intents=intents)
 # ==========================================
 @client.event
 async def on_ready():
-    print(f'✅ Bot Tiktokez connecté : {client.user}')
+    print(f'✅ Bot Tnktok connecté : {client.user}')
 
 @client.event
 async def on_message(message):
@@ -40,14 +40,15 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # On cherche un lien TikTok
+    # On cherche un lien TikTok (qu'il soit court avec vm. ou long avec www.)
     match = re.search(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/[^\s]+', message.content)
     
     if match:
         original_url = match.group(0)
         
-        # LA MISE À JOUR EST ICI : On remplace le domaine par d.tiktokez.com
-        working_url = re.sub(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com', 'https://d.tiktokez.com', original_url)
+        # LA SOLUTION PARFAITE : On remplace simplement le mot de domaine.
+        # Ça conserve le "vm." ou le "www." exactement comme tu le souhaites !
+        working_url = original_url.replace("tiktok.com", "tnktok.com")
         
         # Le bot répond directement
         await message.reply(f"🎥 **Voici la vidéo :**\n{working_url}")
