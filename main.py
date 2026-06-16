@@ -1,7 +1,6 @@
 import discord
 import re
 import os
-import aiohttp
 from flask import Flask
 from threading import Thread
 
@@ -12,7 +11,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot Rapide en ligne !"
+    return "Bot Quickvids en ligne !"
 
 def run_server():
     app.run(host='0.0.0.0', port=8080)
@@ -22,45 +21,22 @@ def keep_alive():
     t.start()
 
 # ==========================================
-# 2. CONFIGURATION DU BOT ET DES MIROIRS
+# 2. CONFIGURATION DU BOT
 # ==========================================
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
-
-# Liste de secours. Si le premier est mort, il teste le 2ème, etc.
-MIRRORS = [
-    "quickvids.app",
-    "tnktok.com",
-    "tiktxk.com",
-    "tikt0k.com"
-]
-
-async def get_working_link(original_link):
-    """Teste les miroirs pour trouver celui qui fonctionne"""
-    async with aiohttp.ClientSession() as session:
-        for mirror in MIRRORS:
-            test_link = re.sub(r'(https?://(?:www\.|vm\.|vt\.)?)tiktok\.com', rf'\1{mirror}', original_link)
-            try:
-                # Requête ultra-rapide pour vérifier si le site est en ligne
-                async with session.head(test_link, timeout=1.5) as response:
-                    if response.status == 200:
-                        return test_link
-            except:
-                continue
-    
-    return re.sub(r'(https?://(?:www\.|vm\.|vt\.)?)tiktok\.com', rf'\1{MIRRORS[0]}', original_link)
 
 # ==========================================
 # 3. ÉVÉNEMENTS DU BOT
 # ==========================================
 @client.event
 async def on_ready():
-    print(f'✅ Bot rapide connecté : {client.user}')
+    print(f'✅ Bot Quickvids connecté : {client.user}')
 
 @client.event
 async def on_message(message):
-    # On ignore les messages des autres bots ou de lui-même
+    # On ignore les messages des bots
     if message.author.bot:
         return
 
@@ -70,18 +46,17 @@ async def on_message(message):
     if match:
         original_url = match.group(0)
         
-        # Le bot trouve le bon lien miroir
-        working_url = await get_working_link(original_url)
+        # ON FORCE QUICKVIDS ICI (On remplace simplement le mot tiktok.com par quickvids.app)
+        working_url = re.sub(r'(https?://(?:www\.|vm\.|vt\.)?)tiktok\.com', r'\1quickvids.app', original_url)
         
-        # Le bot répond directement au message
+        # Le bot répond directement
         await message.reply(f"🎥 **Voici la vidéo :**\n{working_url}")
         
-        # Petite astuce : on essaie de cacher l'aperçu de base du message de ton pote
-        # (car TikTok affiche souvent un encart noir inutile)
+        # On supprime l'aperçu original buggé de TikTok
         try:
             await message.edit(suppress=True)
         except:
-            pass # S'il n'a pas les droits, ce n'est pas grave, il continue
+            pass
 
 # ==========================================
 # 4. DÉMARRAGE
