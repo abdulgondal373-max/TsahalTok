@@ -11,7 +11,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot Quickvids en ligne !"
+    return "Bot Tiktokez en ligne !"
 
 def run_server():
     app.run(host='0.0.0.0', port=8080)
@@ -32,7 +32,7 @@ client = discord.Client(intents=intents)
 # ==========================================
 @client.event
 async def on_ready():
-    print(f'✅ Bot Quickvids connecté : {client.user}')
+    print(f'✅ Bot Tiktokez connecté : {client.user}')
 
 @client.event
 async def on_message(message):
@@ -46,9 +46,8 @@ async def on_message(message):
     if match:
         original_url = match.group(0)
         
-        # CORRECTION ICI : On supprime totalement les 'vm.' ou 'vt.' 
-        # et on les remplace par un lien Quickvids propre.
-        working_url = re.sub(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com', 'https://quickvids.app', original_url)
+        # LA MISE À JOUR EST ICI : On remplace le domaine par d.tiktokez.com
+        working_url = re.sub(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com', 'https://d.tiktokez.com', original_url)
         
         # Le bot répond directement
         await message.reply(f"🎥 **Voici la vidéo :**\n{working_url}")
