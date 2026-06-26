@@ -1,0 +1,5 @@
+discord.py
+flask
+aiohttp
+yt-dlp
+imageio-ffmpeg
