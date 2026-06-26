@@ -67,7 +67,7 @@ async def resolve_tiktok_url(url: str) -> str:
         ) as resp:
             return str(resp.url)
     except Exception as e:
-        print(f"Erreur de résolution d'URL : {e}")
+        print(f"Erreur de résolution d'URL : {e}", flush=True)
         return url
 
 
@@ -79,12 +79,12 @@ async def fetch_photo_image_urls(resolved_url: str):
         ) as resp:
             html = await resp.text()
     except Exception as e:
-        print(f"Erreur de récupération de la page : {e}")
+        print(f"Erreur de récupération de la page : {e}", flush=True)
         return []
 
     match = REHYDRATION_SCRIPT_RE.search(html)
     if not match:
-        print("Bloc de données introuvable sur la page (structure TikTok peut-être changée).")
+        print("Bloc de données introuvable sur la page (structure TikTok peut-être changée).", flush=True)
         return []
 
     try:
@@ -103,7 +103,7 @@ async def fetch_photo_image_urls(resolved_url: str):
                 urls.append(url_list[0])
         return urls
     except Exception as e:
-        print(f"Erreur de lecture des données de la page : {e}")
+        print(f"Erreur de lecture des données de la page : {e}", flush=True)
         return []
 
 
@@ -125,7 +125,7 @@ async def download_images(urls, out_dir: str, referer: str):
                 f.write(content)
             paths.append(path)
         except Exception as e:
-            print(f"Erreur de téléchargement de l'image {i} : {e}")
+            print(f"Erreur de téléchargement de l'image {i} : {e}", flush=True)
     return paths
 
 
@@ -136,7 +136,7 @@ async def download_images(urls, out_dir: str, referer: str):
 async def on_ready():
     global http_session
     http_session = aiohttp.ClientSession()
-    print(f'✅ Bot TsahalTok connecté : {client.user}')
+    print(f'✅ Bot TsahalTok connecté : {client.user}', flush=True)
 
 @client.event
 async def on_message(message):
@@ -157,7 +157,9 @@ async def on_message(message):
             async with message.channel.typing():
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     image_urls = await fetch_photo_image_urls(resolved_url)
+                    print(f"[photo] {len(image_urls)} URL(s) d'image trouvée(s) pour {resolved_url}", flush=True)
                     paths = await download_images(image_urls, tmp_dir, resolved_url) if image_urls else []
+                    print(f"[photo] {len(paths)} image(s) téléchargée(s) avec succès", flush=True)
 
                     if not paths:
                         await message.reply(
