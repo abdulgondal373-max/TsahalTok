@@ -89,12 +89,16 @@ async def fetch_photo_image_urls(resolved_url: str):
 
     try:
         data = json.loads(match.group(1))
+        default_scope = data.get('__DEFAULT_SCOPE__', {})
+        print(f"[photo] Clés dans __DEFAULT_SCOPE__ : {list(default_scope.keys())}", flush=True)
+
         item_struct = (
-            data.get('__DEFAULT_SCOPE__', {})
-            .get('webapp.video-detail', {})
+            default_scope.get('webapp.video-detail', {})
             .get('itemInfo', {})
             .get('itemStruct', {})
         )
+        print(f"[photo] itemStruct non vide : {bool(item_struct)} ; clés : {list(item_struct.keys())}", flush=True)
+
         images = item_struct.get('imagePost', {}).get('images', [])
         urls = []
         for img in images:
