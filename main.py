@@ -32,8 +32,8 @@ TIKTOK_REGEX = re.compile(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/[^\s]+')
 
 
 def fix_tiktok_url(url: str) -> str:
-    """Remplace uniquement le domaine tiktok.com par vxtiktok.com, peu importe le sous-domaine (vm., vt., www.)."""
-    return re.sub(r'tiktok\.com', 'vxtiktok.com', url, count=1)
+    """Remplace uniquement le domaine tiktok.com par kktiktok.com, peu importe le sous-domaine (vm., vt., www.)."""
+    return re.sub(r'tiktok\.com', 'kktiktok.com', url, count=1)
 
 
 # ==========================================
