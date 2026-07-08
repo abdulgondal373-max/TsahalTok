@@ -1,6 +1,7 @@
 import discord
 import re
 import os
+import asyncio
 import aiohttp
 from flask import Flask
 from threading import Thread
@@ -28,7 +29,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
-# On cherche un lien TikTok (qu'il soit court avec vm./vt. ou long avec www.)
 TIKTOK_REGEX = re.compile(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/[^\s]+')
 
 BROWSER_HEADERS = {
@@ -37,17 +37,14 @@ BROWSER_HEADERS = {
     'Accept-Language': 'en-US,en;q=0.9',
 }
 
-# Session HTTP partagée, créée une seule fois au démarrage (juste pour résoudre les liens courts)
 http_session: aiohttp.ClientSession | None = None
 
 
 def swap_domain(url: str, new_domain: str) -> str:
-    """Remplace uniquement le domaine tiktok.com par new_domain, peu importe le sous-domaine (vm., vt., www.)."""
     return re.sub(r'tiktok\.com', new_domain, url, count=1)
 
 
 async def resolve_tiktok_url(url: str) -> str:
-    """Suit les redirections (liens courts vm./vt.) pour obtenir l'URL finale (avec /video/ ou /photo/)."""
     try:
         async with http_session.get(
             url, headers=BROWSER_HEADERS, allow_redirects=True,
@@ -70,7 +67,6 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    # On ignore les messages des bots
     if message.author.bot:
         return
 
@@ -82,15 +78,28 @@ async def on_message(message):
     resolved_url = await resolve_tiktok_url(original_url)
 
     if '/photo/' in resolved_url:
-        # Post photo : tnktok.com gère la génération de diaporama
         fixed_url = swap_domain(original_url, 'tnktok.com')
     else:
-        # Vidéo : kktiktok.com, plus fiable pour ce cas
         fixed_url = swap_domain(original_url, 'kktiktok.com')
 
-    await message.reply(f"🎥 Voici la vidéo :\n{fixed_url}")
+    # Envoi avec gestion du rate limit (3 tentatives max)
+    for attempt in range(3):
+        try:
+            await message.reply(f"🎥 Voici la vidéo :\n{fixed_url}")
+            break
+        except discord.errors.HTTPException as e:
+            if e.status == 429:
+                wait = 5 * (attempt + 1)
+                print(f"Rate limit Discord (tentative {attempt+1}), attente {wait}s...", flush=True)
+                await asyncio.sleep(wait)
+            else:
+                print(f"Erreur Discord lors du reply : {e}", flush=True)
+                break
 
-    # On supprime l'aperçu original (souvent cassé) de TikTok
+    # Délai pour éviter de cumuler trop d'appels API en rafale
+    await asyncio.sleep(1.5)
+
+    # Supprime l'aperçu original TikTok (souvent cassé)
     try:
         await message.edit(suppress=True)
     except Exception:
