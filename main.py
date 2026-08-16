@@ -46,11 +46,9 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
 
 
 def fix_instagram_url(url: str) -> str:
-    # ddinstagram (InstaFix) n'embed pas fiablement les chemins /reel/ ou /reels/,
-    # mais le même contenu fonctionne via /p/. On normalise donc le chemin.
-    fixed = swap_domain(url, 'instagram.com', 'ddinstagram.com')
-    fixed = re.sub(r'/reels?/', '/p/', fixed, count=1)
-    return fixed
+    # ddinstagram (InstaFix) est devenu peu fiable/obsolète en 2026.
+    # On utilise gginstagram.com (InstagramEmbed), plus stable actuellement.
+    return swap_domain(url, 'instagram.com', 'gginstagram.com')
 
 
 async def resolve_url(url: str) -> str:
