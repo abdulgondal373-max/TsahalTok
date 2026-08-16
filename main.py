@@ -46,9 +46,9 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
 
 
 def fix_instagram_url(url: str) -> str:
-    # ddinstagram (InstaFix) est devenu peu fiable/obsolète en 2026.
-    # On utilise gginstagram.com (InstagramEmbed), plus stable actuellement.
-    return swap_domain(url, 'instagram.com', 'gginstagram.com')
+    # zzinstagram.com répartit automatiquement vers plusieurs fixers actifs,
+    # plus fiable qu'un service fixe unique (ddinstagram/gginstagram sont morts en 2026).
+    return swap_domain(url, 'instagram.com', 'zzinstagram.com')
 
 
 async def resolve_url(url: str) -> str:
