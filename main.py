@@ -45,6 +45,14 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
     return re.sub(re.escape(old_domain), new_domain, url, count=1)
 
 
+def fix_instagram_url(url: str) -> str:
+    # ddinstagram (InstaFix) n'embed pas fiablement les chemins /reel/ ou /reels/,
+    # mais le même contenu fonctionne via /p/. On normalise donc le chemin.
+    fixed = swap_domain(url, 'instagram.com', 'ddinstagram.com')
+    fixed = re.sub(r'/reels?/', '/p/', fixed, count=1)
+    return fixed
+
+
 async def resolve_url(url: str) -> str:
     try:
         async with http_session.get(
@@ -85,7 +93,7 @@ async def on_message(message):
         label = "🎥 Voici la vidéo :"
     elif insta_match:
         original_url = insta_match.group(0)
-        fixed_url = swap_domain(original_url, 'instagram.com', 'ddinstagram.com')
+        fixed_url = fix_instagram_url(original_url)
         label = "🎬 Voici le reel :"
     else:
         return
