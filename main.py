@@ -54,11 +54,11 @@ def fix_instagram_url(url: str, domain: str) -> str:
 # services tiers non-officiels tombent fréquemment.
 INSTAGRAM_FIXERS = [
     'ddinstagram.com',
-    'kkinstagram.com',
     'fxig.seria.moe',
     'eeinstagram.com',
     'instagramez.com',
     'uuinstagram.com',
+    'toinstagram.com',
 ]
 
 
@@ -73,7 +73,14 @@ async def get_working_instagram_fixer(original_url: str) -> str:
                 candidate, headers=BROWSER_HEADERS, allow_redirects=True,
                 timeout=aiohttp.ClientTimeout(total=6)
             ) as resp:
-                if resp.status < 400:
+                if resp.status >= 400:
+                    continue
+                # Un simple statut 200 ne suffit pas : certains services morts
+                # renvoient leur page d'accueil générique (200 OK) au lieu du
+                # post demandé. On vérifie donc que la réponse contient bien
+                # les balises Open Graph d'un post réel (og:video/og:image).
+                html = await resp.text()
+                if 'og:video' in html or 'og:image' in html:
                     return candidate
         except Exception:
             continue
