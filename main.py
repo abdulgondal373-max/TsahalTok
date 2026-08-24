@@ -78,17 +78,22 @@ async def check_fixer_content(candidate: str) -> bool:
     try:
         async with http_session.get(
             candidate, headers=BROWSER_HEADERS, allow_redirects=True,
-            timeout=aiohttp.ClientTimeout(total=6)
+            timeout=aiohttp.ClientTimeout(total=10)
         ) as resp:
             if resp.status >= 400:
+                print(f"[Instagram fixer] {candidate} -> status {resp.status}", flush=True)
                 return False
             html = await resp.text()
-            return 'og:video' in html or 'og:image' in html
-    except Exception:
+            ok = 'og:video' in html or 'og:image' in html
+            print(f"[Instagram fixer] {candidate} -> status {resp.status}, contenu valide: {ok}", flush=True)
+            return ok
+    except Exception as e:
+        print(f"[Instagram fixer] {candidate} -> erreur: {e}", flush=True)
         return False
 
 
 async def get_working_instagram_fixer(original_url: str) -> str:
+    print(f"[Instagram] SELF_HOSTED_INSTAFIX_URL = '{SELF_HOSTED_INSTAFIX_URL}'", flush=True)
     # 1. On essaie d'abord notre instance auto-hébergée (plus fiable, pas de
     #    dépendance à un service tiers qui peut disparaître du jour au lendemain).
     if SELF_HOSTED_INSTAFIX_URL:
