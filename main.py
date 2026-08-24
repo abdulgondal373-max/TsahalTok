@@ -3,6 +3,7 @@ import re
 import os
 import asyncio
 import aiohttp
+from urllib.parse import urlparse
 from flask import Flask
 from threading import Thread
 
@@ -49,9 +50,20 @@ def fix_instagram_url(url: str, domain: str) -> str:
     return swap_domain(url, 'instagram.com', domain)
 
 
-# Liste de fixers testés par ordre de préférence. Le bot vérifie lequel
-# répond correctement (pas de 404/erreur) avant de l'utiliser, car ces
-# services tiers non-officiels tombent fréquemment.
+def use_self_hosted_fixer(url: str, base_url: str) -> str:
+    # Remplace uniquement le host (le chemin /reel/xxx et les query params
+    # sont conservés), car notre instance auto-hébergée ne s'appelle pas
+    # forcément "quelquechose-instagram.com".
+    original = urlparse(url)
+    hosted = urlparse(base_url)
+    return original._replace(scheme=hosted.scheme, netloc=hosted.netloc).geturl()
+
+
+# URL de notre instance InstaFix auto-hébergée sur Koyeb (ex: https://xxxxx.koyeb.app)
+# Configurée via variable d'environnement pour pouvoir la changer sans retoucher le code.
+SELF_HOSTED_INSTAFIX_URL = os.environ.get('INSTAFIX_URL', '').rstrip('/')
+
+# Fixers publics de secours, utilisés seulement si notre instance perso échoue.
 INSTAGRAM_FIXERS = [
     'ddinstagram.com',
     'fxig.seria.moe',
@@ -62,28 +74,40 @@ INSTAGRAM_FIXERS = [
 ]
 
 
+async def check_fixer_content(candidate: str) -> bool:
+    try:
+        async with http_session.get(
+            candidate, headers=BROWSER_HEADERS, allow_redirects=True,
+            timeout=aiohttp.ClientTimeout(total=6)
+        ) as resp:
+            if resp.status >= 400:
+                return False
+            html = await resp.text()
+            return 'og:video' in html or 'og:image' in html
+    except Exception:
+        return False
+
+
 async def get_working_instagram_fixer(original_url: str) -> str:
+    # 1. On essaie d'abord notre instance auto-hébergée (plus fiable, pas de
+    #    dépendance à un service tiers qui peut disparaître du jour au lendemain).
+    if SELF_HOSTED_INSTAFIX_URL:
+        candidate = use_self_hosted_fixer(original_url, SELF_HOSTED_INSTAFIX_URL)
+        if await check_fixer_content(candidate):
+            return candidate
+
+    # 2. Sinon on retombe sur les fixers publics en cascade.
     for domain in INSTAGRAM_FIXERS:
         candidate = fix_instagram_url(original_url, domain)
-        try:
-            # GET plutôt que HEAD : plusieurs de ces services (edge workers)
-            # ne supportent pas HEAD et renvoient une erreur, faisant
-            # échouer la vérification alors que le lien fonctionne réellement.
-            async with http_session.get(
-                candidate, headers=BROWSER_HEADERS, allow_redirects=True,
-                timeout=aiohttp.ClientTimeout(total=6)
-            ) as resp:
-                if resp.status >= 400:
-                    continue
-                # Un simple statut 200 ne suffit pas : certains services morts
-                # renvoient leur page d'accueil générique (200 OK) au lieu du
-                # post demandé. On vérifie donc que la réponse contient bien
-                # les balises Open Graph d'un post réel (og:video/og:image).
-                html = await resp.text()
-                if 'og:video' in html or 'og:image' in html:
-                    return candidate
-        except Exception:
-            continue
+        # GET plutôt que HEAD : plusieurs de ces services (edge workers)
+        # ne supportent pas HEAD et renvoient une erreur, faisant
+        # échouer la vérification alors que le lien fonctionne réellement.
+        # Un simple statut 200 ne suffit pas non plus : certains services
+        # morts renvoient leur page d'accueil générique (200 OK) au lieu du
+        # post demandé, d'où la vérification du contenu (og:video/og:image).
+        if await check_fixer_content(candidate):
+            return candidate
+
     # Aucun fixer disponible : on renvoie le lien Instagram original
     return original_url
 
