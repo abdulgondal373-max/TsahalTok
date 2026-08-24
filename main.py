@@ -47,83 +47,36 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
 
 
 def strip_instagram_tracking_params(url: str) -> str:
-    # Bug connu d'InstaFix (et de la plupart des fixers dérivés) : les liens
-    # contenant le tracker de partage igsh/igsi cassent la résolution côté
-    # serveur. On retire tout le query string pour garder juste /reel/<id>/.
+    # Les liens contenant le tracker de partage igsh/igsi posent problème
+    # à certaines API. On retire tout le query string par précaution.
     return urlparse(url)._replace(query='').geturl()
 
 
-def fix_instagram_url(url: str, domain: str) -> str:
-    clean_url = strip_instagram_tracking_params(url)
-    return swap_domain(clean_url, 'instagram.com', domain)
+# Depuis le 15 juin 2026, Meta a rouvert l'API oEmbed d'Instagram sans
+# nécessiter de token/app développeur (elle était fermée depuis 2020).
+# C'est donc la source la plus fiable pour récupérer une miniature/titre
+# d'un post public, bien plus stable que les fixers tiers non-officiels
+# (InstaFix, kkinstagram, etc.) qui reposent sur du scraping bloqué par Meta.
+META_OEMBED_URL = 'https://graph.facebook.com/v25.0/instagram_oembed'
 
 
-def use_self_hosted_fixer(url: str, base_url: str) -> str:
-    clean_url = strip_instagram_tracking_params(url)
-    # Remplace uniquement le host (le chemin /reel/xxx est conservé),
-    # car notre instance auto-hébergée ne s'appelle pas
-    # forcément "quelquechose-instagram.com".
-    original = urlparse(clean_url)
-    hosted = urlparse(base_url)
-    return original._replace(scheme=hosted.scheme, netloc=hosted.netloc).geturl()
-
-
-# URL de notre instance InstaFix auto-hébergée sur Koyeb (ex: https://xxxxx.koyeb.app)
-# Configurée via variable d'environnement pour pouvoir la changer sans retoucher le code.
-SELF_HOSTED_INSTAFIX_URL = os.environ.get('INSTAFIX_URL', '').rstrip('/')
-
-# Fixers publics de secours, utilisés seulement si notre instance perso échoue.
-INSTAGRAM_FIXERS = [
-    'ddinstagram.com',
-    'fxig.seria.moe',
-    'eeinstagram.com',
-    'instagramez.com',
-    'uuinstagram.com',
-    'toinstagram.com',
-]
-
-
-async def check_fixer_content(candidate: str) -> bool:
+async def fetch_instagram_oembed(url: str) -> dict | None:
     try:
         async with http_session.get(
-            candidate, headers=BROWSER_HEADERS, allow_redirects=True,
-            timeout=aiohttp.ClientTimeout(total=10)
+            META_OEMBED_URL,
+            params={'url': url},
+            headers=BROWSER_HEADERS,
+            timeout=aiohttp.ClientTimeout(total=8)
         ) as resp:
-            if resp.status >= 400:
-                print(f"[Instagram fixer] {candidate} -> status {resp.status}", flush=True)
-                return False
-            html = await resp.text()
-            ok = 'og:video' in html or 'og:image' in html
-            print(f"[Instagram fixer] {candidate} -> status {resp.status}, contenu valide: {ok}", flush=True)
-            return ok
+            if resp.status != 200:
+                print(f"[Instagram oEmbed] status {resp.status} pour {url}", flush=True)
+                return None
+            data = await resp.json(content_type=None)
+            print(f"[Instagram oEmbed] OK pour {url} (thumbnail: {bool(data.get('thumbnail_url'))})", flush=True)
+            return data
     except Exception as e:
-        print(f"[Instagram fixer] {candidate} -> erreur: {e}", flush=True)
-        return False
-
-
-async def get_working_instagram_fixer(original_url: str) -> str:
-    print(f"[Instagram] SELF_HOSTED_INSTAFIX_URL = '{SELF_HOSTED_INSTAFIX_URL}'", flush=True)
-    # 1. On essaie d'abord notre instance auto-hébergée (plus fiable, pas de
-    #    dépendance à un service tiers qui peut disparaître du jour au lendemain).
-    if SELF_HOSTED_INSTAFIX_URL:
-        candidate = use_self_hosted_fixer(original_url, SELF_HOSTED_INSTAFIX_URL)
-        if await check_fixer_content(candidate):
-            return candidate
-
-    # 2. Sinon on retombe sur les fixers publics en cascade.
-    for domain in INSTAGRAM_FIXERS:
-        candidate = fix_instagram_url(original_url, domain)
-        # GET plutôt que HEAD : plusieurs de ces services (edge workers)
-        # ne supportent pas HEAD et renvoient une erreur, faisant
-        # échouer la vérification alors que le lien fonctionne réellement.
-        # Un simple statut 200 ne suffit pas non plus : certains services
-        # morts renvoient leur page d'accueil générique (200 OK) au lieu du
-        # post demandé, d'où la vérification du contenu (og:video/og:image).
-        if await check_fixer_content(candidate):
-            return candidate
-
-    # Aucun fixer disponible : on renvoie le lien Instagram original
-    return original_url
+        print(f"[Instagram oEmbed] erreur pour {url} : {e}", flush=True)
+        return None
 
 
 async def is_tiktok_photo_post(url: str) -> bool:
@@ -146,6 +99,30 @@ async def is_tiktok_photo_post(url: str) -> bool:
         return False
 
 
+async def reply_with_retry(message, **kwargs):
+    for attempt in range(3):
+        try:
+            await message.reply(**kwargs)
+            return True
+        except discord.errors.HTTPException as e:
+            if e.status == 429:
+                wait = 5 * (attempt + 1)
+                print(f"Rate limit Discord (tentative {attempt+1}), attente {wait}s...", flush=True)
+                await asyncio.sleep(wait)
+            else:
+                print(f"Erreur Discord lors du reply : {e}", flush=True)
+                return False
+    return False
+
+
+async def suppress_original_embed(message):
+    await asyncio.sleep(1.5)
+    try:
+        await message.edit(suppress=True)
+    except Exception:
+        pass
+
+
 # ==========================================
 # 3. ÉVÉNEMENTS DU BOT
 # ==========================================
@@ -153,6 +130,12 @@ async def is_tiktok_photo_post(url: str) -> bool:
 async def on_ready():
     global http_session
     http_session = aiohttp.ClientSession()
+    await client.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.playing,
+            name="Shabbat shalom 🇮🇱🇮🇱🇮🇱"
+        )
+    )
     print(f'✅ Bot TsahalTok connecté : {client.user}', flush=True)
 
 @client.event
@@ -169,36 +152,31 @@ async def on_message(message):
             fixed_url = swap_domain(original_url, 'tiktok.com', 'tnktok.com')
         else:
             fixed_url = swap_domain(original_url, 'tiktok.com', 'kktiktok.com')
-        label = "🎥 Voici la vidéo :"
+
+        await reply_with_retry(message, content=f"🎥 Voici la vidéo :\n{fixed_url}")
+        await suppress_original_embed(message)
+
     elif insta_match:
-        original_url = insta_match.group(0)
-        fixed_url = await get_working_instagram_fixer(original_url)
-        label = "🎬 Voici le reel :"
-    else:
-        return
+        original_url = strip_instagram_tracking_params(insta_match.group(0))
+        data = await fetch_instagram_oembed(original_url)
 
-    # Envoi avec gestion du rate limit (3 tentatives max)
-    for attempt in range(3):
-        try:
-            await message.reply(f"{label}\n{fixed_url}")
-            break
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                wait = 5 * (attempt + 1)
-                print(f"Rate limit Discord (tentative {attempt+1}), attente {wait}s...", flush=True)
-                await asyncio.sleep(wait)
-            else:
-                print(f"Erreur Discord lors du reply : {e}", flush=True)
-                break
+        if data and data.get('thumbnail_url'):
+            embed = discord.Embed(
+                title=data.get('title') or 'Publication Instagram',
+                url=original_url,
+                description=f"Par {data['author_name']}" if data.get('author_name') else None,
+                color=0xE1306C,
+            )
+            embed.set_image(url=data['thumbnail_url'])
+            sent = await reply_with_retry(message, embed=embed)
+            if not sent:
+                await reply_with_retry(message, content=f"🎬 Voici le reel :\n{original_url}")
+        else:
+            # oEmbed a échoué (post privé/supprimé ou souci ponctuel de l'API) :
+            # on renvoie simplement le lien d'origine plutôt que rien du tout.
+            await reply_with_retry(message, content=f"🎬 Voici le reel :\n{original_url}")
 
-    # Délai pour éviter de cumuler trop d'appels API en rafale
-    await asyncio.sleep(1.5)
-
-    # Supprime l'aperçu original (souvent cassé)
-    try:
-        await message.edit(suppress=True)
-    except Exception:
-        pass
+        await suppress_original_embed(message)
 
 # ==========================================
 # 4. DÉMARRAGE
