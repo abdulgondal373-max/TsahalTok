@@ -77,16 +77,24 @@ async def get_working_instagram_fixer(original_url: str) -> str:
     return original_url
 
 
-async def resolve_url(url: str) -> str:
+async def is_tiktok_photo_post(url: str) -> bool:
+    # Utilise l'API oEmbed officielle de TikTok pour détecter le type de post
+    # (plus fiable que suivre nous-mêmes les redirections, qui échouait
+    # souvent silencieusement et faisait retomber tous les liens sur "vidéo").
     try:
         async with http_session.get(
-            url, headers=BROWSER_HEADERS, allow_redirects=True,
-            timeout=aiohttp.ClientTimeout(total=10)
+            'https://www.tiktok.com/oembed',
+            params={'url': url},
+            headers=BROWSER_HEADERS,
+            timeout=aiohttp.ClientTimeout(total=6)
         ) as resp:
-            return str(resp.url)
+            if resp.status != 200:
+                return False
+            data = await resp.json(content_type=None)
+            return data.get('type') != 'video'
     except Exception as e:
-        print(f"Erreur de résolution d'URL : {e}", flush=True)
-        return url
+        print(f"Erreur oEmbed TikTok : {e}", flush=True)
+        return False
 
 
 # ==========================================
@@ -108,9 +116,7 @@ async def on_message(message):
 
     if tiktok_match:
         original_url = tiktok_match.group(0)
-        resolved_url = await resolve_url(original_url)
-
-        if '/photo/' in resolved_url:
+        if await is_tiktok_photo_post(original_url):
             fixed_url = swap_domain(original_url, 'tiktok.com', 'tnktok.com')
         else:
             fixed_url = swap_domain(original_url, 'tiktok.com', 'kktiktok.com')
