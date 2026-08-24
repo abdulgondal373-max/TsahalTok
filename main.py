@@ -53,11 +53,12 @@ def fix_instagram_url(url: str, domain: str) -> str:
 # répond correctement (pas de 404/erreur) avant de l'utiliser, car ces
 # services tiers non-officiels tombent fréquemment.
 INSTAGRAM_FIXERS = [
-    'zzinstagram.com',
     'ddinstagram.com',
-    'gginstagram.com',
-    'fxstagram.com',
-    'g.embedez.com',
+    'kkinstagram.com',
+    'fxig.seria.moe',
+    'eeinstagram.com',
+    'instagramez.com',
+    'uuinstagram.com',
 ]
 
 
@@ -65,7 +66,10 @@ async def get_working_instagram_fixer(original_url: str) -> str:
     for domain in INSTAGRAM_FIXERS:
         candidate = fix_instagram_url(original_url, domain)
         try:
-            async with http_session.head(
+            # GET plutôt que HEAD : plusieurs de ces services (edge workers)
+            # ne supportent pas HEAD et renvoient une erreur, faisant
+            # échouer la vérification alors que le lien fonctionne réellement.
+            async with http_session.get(
                 candidate, headers=BROWSER_HEADERS, allow_redirects=True,
                 timeout=aiohttp.ClientTimeout(total=6)
             ) as resp:
