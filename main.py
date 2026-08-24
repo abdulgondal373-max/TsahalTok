@@ -64,12 +64,13 @@ async def fetch_instagram_oembed(url: str) -> dict | None:
     try:
         async with http_session.get(
             META_OEMBED_URL,
-            params={'url': url},
+            params={'url': url, 'maxwidth': 540},
             headers=BROWSER_HEADERS,
             timeout=aiohttp.ClientTimeout(total=8)
         ) as resp:
             if resp.status != 200:
-                print(f"[Instagram oEmbed] status {resp.status} pour {url}", flush=True)
+                body = await resp.text()
+                print(f"[Instagram oEmbed] status {resp.status} pour {url} -> {body}", flush=True)
                 return None
             data = await resp.json(content_type=None)
             print(f"[Instagram oEmbed] OK pour {url} (thumbnail: {bool(data.get('thumbnail_url'))})", flush=True)
