@@ -45,10 +45,36 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
     return re.sub(re.escape(old_domain), new_domain, url, count=1)
 
 
-def fix_instagram_url(url: str) -> str:
-    # zzinstagram.com répartit automatiquement vers plusieurs fixers actifs,
-    # plus fiable qu'un service fixe unique (ddinstagram/gginstagram sont morts en 2026).
-    return swap_domain(url, 'instagram.com', 'zzinstagram.com')
+def fix_instagram_url(url: str, domain: str) -> str:
+    return swap_domain(url, 'instagram.com', domain)
+
+
+# Liste de fixers testés par ordre de préférence. Le bot vérifie lequel
+# répond correctement (pas de 404/erreur) avant de l'utiliser, car ces
+# services tiers non-officiels tombent fréquemment.
+INSTAGRAM_FIXERS = [
+    'zzinstagram.com',
+    'ddinstagram.com',
+    'gginstagram.com',
+    'fxstagram.com',
+    'g.embedez.com',
+]
+
+
+async def get_working_instagram_fixer(original_url: str) -> str:
+    for domain in INSTAGRAM_FIXERS:
+        candidate = fix_instagram_url(original_url, domain)
+        try:
+            async with http_session.head(
+                candidate, headers=BROWSER_HEADERS, allow_redirects=True,
+                timeout=aiohttp.ClientTimeout(total=6)
+            ) as resp:
+                if resp.status < 400:
+                    return candidate
+        except Exception:
+            continue
+    # Aucun fixer disponible : on renvoie le lien Instagram original
+    return original_url
 
 
 async def resolve_url(url: str) -> str:
@@ -91,7 +117,7 @@ async def on_message(message):
         label = "🎥 Voici la vidéo :"
     elif insta_match:
         original_url = insta_match.group(0)
-        fixed_url = fix_instagram_url(original_url)
+        fixed_url = await get_working_instagram_fixer(original_url)
         label = "🎬 Voici le reel :"
     else:
         return
