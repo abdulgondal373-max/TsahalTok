@@ -46,15 +46,24 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
     return re.sub(re.escape(old_domain), new_domain, url, count=1)
 
 
+def strip_instagram_tracking_params(url: str) -> str:
+    # Bug connu d'InstaFix (et de la plupart des fixers dérivés) : les liens
+    # contenant le tracker de partage igsh/igsi cassent la résolution côté
+    # serveur. On retire tout le query string pour garder juste /reel/<id>/.
+    return urlparse(url)._replace(query='').geturl()
+
+
 def fix_instagram_url(url: str, domain: str) -> str:
-    return swap_domain(url, 'instagram.com', domain)
+    clean_url = strip_instagram_tracking_params(url)
+    return swap_domain(clean_url, 'instagram.com', domain)
 
 
 def use_self_hosted_fixer(url: str, base_url: str) -> str:
-    # Remplace uniquement le host (le chemin /reel/xxx et les query params
-    # sont conservés), car notre instance auto-hébergée ne s'appelle pas
+    clean_url = strip_instagram_tracking_params(url)
+    # Remplace uniquement le host (le chemin /reel/xxx est conservé),
+    # car notre instance auto-hébergée ne s'appelle pas
     # forcément "quelquechose-instagram.com".
-    original = urlparse(url)
+    original = urlparse(clean_url)
     hosted = urlparse(base_url)
     return original._replace(scheme=hosted.scheme, netloc=hosted.netloc).geturl()
 
