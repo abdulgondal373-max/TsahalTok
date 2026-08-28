@@ -45,22 +45,20 @@ def swap_domain(url: str, old_domain: str, new_domain: str) -> str:
 
 
 async def is_tiktok_photo_post(url: str) -> bool:
-    # Utilise l'API oEmbed officielle de TikTok pour détecter le type de post
-    # (plus fiable que suivre nous-mêmes les redirections, qui échouait
-    # souvent silencieusement et faisait retomber tous les liens sur "vidéo").
+    # On résout l'URL courte (vm.tiktok.com/...) vers son URL finale et on
+    # regarde si elle contient "/photo/". L'API oEmbed a été abandonnée ici
+    # car son champ "type" ne distingue pas fiablement carrousel/vidéo.
     try:
         async with http_session.get(
-            'https://www.tiktok.com/oembed',
-            params={'url': url},
-            headers=BROWSER_HEADERS,
-            timeout=aiohttp.ClientTimeout(total=6)
+            url, headers=BROWSER_HEADERS, allow_redirects=True,
+            timeout=aiohttp.ClientTimeout(total=10)
         ) as resp:
-            if resp.status != 200:
-                return False
-            data = await resp.json(content_type=None)
-            return data.get('type') != 'video'
+            resolved_url = str(resp.url)
+            is_photo = '/photo/' in resolved_url
+            print(f"[TikTok] {url} -> résolu en {resolved_url} (photo: {is_photo})", flush=True)
+            return is_photo
     except Exception as e:
-        print(f"Erreur oEmbed TikTok : {e}", flush=True)
+        print(f"[TikTok] erreur de résolution pour {url} : {e}", flush=True)
         return False
 
 
